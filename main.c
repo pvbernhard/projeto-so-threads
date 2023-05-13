@@ -8,9 +8,9 @@ const char PI[] = "3.14159265358979323846264338327950288419716939937510582097494
 
 int main(int, char **);
 int read_quantidade_requisicoes(int, char **);
+void gera_requisicoes(char *, int, int, int, int, int);
 int get_aleatorio(int, int);
 char *get_pi(char *, int);
-void gera_requisicoes(char *, int, int, int, int, int);
 
 int main(int argc, char **argv)
 {
@@ -21,6 +21,10 @@ int main(int argc, char **argv)
   const int TEMPOREQ = 250;
 
   int quantidade_requisicoes = read_quantidade_requisicoes(argc, argv);
+
+  // TODO: Gerar arquivo de requisições
+  // TODO: Instanciar threads trabalhadoras
+  // TODO: Instanciar thread dispatcher
 
   return 0;
 }
@@ -62,6 +66,17 @@ int read_quantidade_requisicoes(int argc, char **argv)
   return quantidade_requisicoes;
 }
 
+void gera_requisicoes(
+    char *nome_arquivo,
+    int quantidade_requisicoes,
+    int digitos_min,
+    int digitos_max,
+    int tempo_min,
+    int tempo_max)
+{
+  // TODO
+}
+
 /**
  * Retorna um número aleatório no intervalo [min, max].
  */
@@ -95,15 +110,4 @@ char *get_pi(char *destino, int digitos)
   destino[quantidade_caracteres] = '\0';
 
   return destino;
-}
-
-void gera_requisicoes(
-    char *nome_arquivo,
-    int quantidade_requisicoes,
-    int digitos_min,
-    int digitos_max,
-    int tempo_min,
-    int tempo_max)
-{
-  // TODO
 }
