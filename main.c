@@ -7,6 +7,7 @@
 const char PI[] = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679";
 
 int main(int, char **);
+int read_quantidade_requisicoes(int, char **);
 int get_aleatorio(int, int);
 char *get_pi(char *, int);
 void gera_requisicoes(char *, int, int, int, int, int);
@@ -19,6 +20,13 @@ int main(int argc, char **argv)
   // periodicidade das requisições em milisegundos
   const int TEMPOREQ = 250;
 
+  int quantidade_requisicoes = read_quantidade_requisicoes(argc, argv);
+
+  return 0;
+}
+
+int read_quantidade_requisicoes(int argc, char **argv)
+{
   int quantidade_requisicoes = 0;
 
   // checa se foi passado argumentos para o programa
@@ -51,7 +59,7 @@ int main(int argc, char **argv)
     }
   }
 
-  return 0;
+  return quantidade_requisicoes;
 }
 
 /**
