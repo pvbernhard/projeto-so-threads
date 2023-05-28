@@ -41,8 +41,13 @@ int main(const int argc, const char **argv)
   // nome do arquivo de requisições
   const char arquivo_requisicoes[] = "requisicoes.txt";
 
+  /**
+   * lê a quantidade de requisições do
+   * parâmetro passado ao programa ou do input
+   */
   int quantidade_requisicoes = read_quantidade_requisicoes(argc, argv);
 
+  // gera o arquivo de requisições
   bool requisicoes = gera_requisicoes(
       arquivo_requisicoes,
       quantidade_requisicoes,
@@ -51,6 +56,7 @@ int main(const int argc, const char **argv)
       tempoespera_min,
       tempoespera_max);
 
+  // verifica se o arquivo foi ou não gerado com sucesso
   if (!requisicoes)
   {
     puts("Erro ao tentar criar o arquivo de requisições!");
