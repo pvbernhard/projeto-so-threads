@@ -7,6 +7,7 @@
 // valor de PI com precisão de 100 casas decimais
 const char PI[] = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679";
 
+// tipo booleano
 typedef enum bool
 {
   false = 0,
@@ -103,6 +104,10 @@ int read_quantidade_requisicoes(const int argc, const char **argv)
   return quantidade_requisicoes;
 }
 
+/**
+ * Gera o arquivo de requisições e retorna true em caso de sucesso e
+ * false em caso de erro
+ */
 bool gera_requisicoes(
     const char *nome_arquivo,
     const int quantidade_requisicoes,
