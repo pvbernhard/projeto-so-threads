@@ -1,7 +1,12 @@
 {
   "editor.formatOnSave": true,
   "code-runner.executorMap": {
-    "c": "cd $dir && gcc $fileName -o $fileNameWithoutExt -lm && $dir$fileNameWithoutExt",
+    "c": "cd $dir && gcc $fileName -o $fileNameWithoutExt -lm -lgmp && $dir$fileNameWithoutExt",
   },
-  "code-runner.runInTerminal": true
+  "code-runner.runInTerminal": true,
+  "files.associations": {
+    "pthread.h": "c",
+    "stdio.h": "c",
+    "string.h": "c"
+  }
 }
