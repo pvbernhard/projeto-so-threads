@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <gmp.h>
 
 #include <string.h>
 #include <time.h>
@@ -45,6 +46,14 @@ int get_aleatorio(const int, const int);
 // função principal
 int main(const int argc, const char **argv)
 {
+  int digitos = 1000;
+  // memória: inteiro (3) + ponto + digitos + \0
+  char *pi = (char *)calloc(2 + digitos + 1, sizeof(char));
+  get_pi(pi, digitos);
+
+  printf("PI: %s\n", pi);
+  return 0;
+
   // número de threads trabalhadoras
   const int N = 10;
 
@@ -211,7 +220,7 @@ bool gera_requisicoes(
 }
 
 /**
- * Retorna um número aleatório no intervalo [min, max].
+ * Retorna um número aleatório no intervalo [min, max]
  */
 int get_aleatorio(const int min, const int max)
 {
@@ -228,27 +237,126 @@ int get_aleatorio(const int min, const int max)
 }
 
 /**
- * Coloca PI com a quantidade especificada de dígitos em destino e retorna seu endereço.
+ * Calcula o valor de PI com o algoritmo de Gauss–Legendre, coloca o valor
+ * com a quantidade especificada de dígitos em destino e retorna seu endereço
  */
 char *get_pi(char *destino, const int digitos)
 {
-  int quantidade_caracteres;
-  char *str;
+  // bits para a precisão de dígitos - 2 dígitos a mais por garantia
+  int precisao = (digitos + 2) * 3.35; // log2(10) == 3.32
 
-  if (digitos <= 0)
+  /**
+   * calcula quantas iterações são necessárias.
+   * 1 iteração: 2 dígitos
+   * 2 iterações: 7 dígitos
+   * 3 iterações: 7*2=14 dígitos (18, na realidade)
+   * ...
+   */
+  int iteracoes;
+  if (digitos <= 2)
   {
-    quantidade_caracteres = 1;
-    str = "3";
+    iteracoes = 1;
   }
   else
   {
-    // '3' + '.' + quantidade de digitos
-    quantidade_caracteres = 2 + digitos;
-    strcat(str, PI);
+    iteracoes = 2;
+    int max_digitos = 7;
+    while (max_digitos < digitos)
+    {
+      iteracoes++;
+      max_digitos *= 2;
+    }
   }
 
-  strncpy(destino, str, quantidade_caracteres);
-  destino[quantidade_caracteres] = '\0';
+  // inicializa variáveis do algoritmo
+  mpf_t a_0, a_n, b_0, b_n, t_0, t_n, p_0, p_n, pi;
+
+  mpf_init2(a_0, precisao);
+  mpf_init2(b_0, precisao);
+  mpf_init2(t_0, precisao);
+  mpf_init2(p_0, precisao);
+
+  mpf_init2(a_n, precisao);
+  mpf_init2(b_n, precisao);
+  mpf_init2(t_n, precisao);
+  mpf_init2(p_n, precisao);
+
+  mpf_init2(pi, precisao);
+
+  /** 1 */
+  mpf_set_ui(a_0, 1); // a0=1
+  /** 1/sqrt(2) */
+  mpf_set_ui(b_0, 2);      // b0=2
+  mpf_sqrt(b_0, b_0);      // b0=sqrt(b0)
+  mpf_ui_div(b_0, 1, b_0); // bo=1/b0
+  /** 1/4 */
+  mpf_set_ui(t_0, 1);      // to=1
+  mpf_div_ui(t_0, t_0, 4); // t0=t0/4
+  /** 1 */
+  mpf_set_ui(p_0, 1); // p0=1
+
+  for (int i = 0; i < iteracoes; i++)
+  {
+    /** an=(a0+b0)/2 */
+    mpf_add(a_n, a_0, b_0);  // an=a0+b0
+    mpf_div_ui(a_n, a_n, 2); // an=an/2
+    /** bn=sqrt(a0*b0) */
+    mpf_mul(b_n, a_0, b_0); // bn=a0*b0
+    mpf_sqrt(b_n, b_n);     // bn=sqrt(bn)
+    /** tn=t0-p0*(a0-an)^2 */
+    mpf_sub(t_n, a_0, a_n);  // tn=a0-an
+    mpf_pow_ui(t_n, t_n, 2); // tn=tn^2
+    mpf_mul(t_n, p_0, t_n);  // tn=p0*tn
+    mpf_sub(t_n, t_0, t_n);  // tn=t0-tn
+    /** pn=2*p0 */
+    mpf_mul_ui(p_n, p_0, 2); // pn=p0*2
+
+    // atualiza variáveis anteriores (*0) para valores atuais (*n)
+    mpf_set(a_0, a_n);
+    mpf_set(b_0, b_n);
+    mpf_set(t_0, t_n);
+    mpf_set(p_0, p_n);
+  }
+
+  /** pi=[(an+bn)^2]/(4*tn) */
+  mpf_add(pi, a_n, b_n); // pi=an+bn
+  mpf_pow_ui(pi, pi, 2); // pi=pi^2
+  mpf_div_ui(pi, pi, 4); // pi=pi/4
+  mpf_div(pi, pi, t_n);  // pi=pi/tn
+
+  mp_exp_t expoente;
+
+  /** valor inteiro (3) + digitos + 2 digitos */
+  int n_caracteres = 3 + digitos;
+
+  // + 1 para o \0
+  char *s = (char *)calloc(n_caracteres + 1, sizeof(char));
+
+  if (s == NULL)
+    return NULL;
+
+  mpf_get_str(s, &expoente, 10, n_caracteres, pi);
+
+  strcpy(destino, "3.");
+  strncat(destino, s + 1, digitos);
+
+  free(s);
+
+  mpf_clear(a_0);
+  mpf_clear(b_0);
+  mpf_clear(t_0);
+  mpf_clear(p_0);
+
+  mpf_clear(a_n);
+  mpf_clear(b_n);
+  mpf_clear(t_n);
+  mpf_clear(p_n);
+
+  mpf_clear(pi);
+
+  // se não há digitos, desconsidera o ponto
+  if (digitos == 0)
+    destino[1] = '\0';
 
   return destino;
 }
