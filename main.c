@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <pthread.h>
+
 #include <string.h>
+#include <time.h>
 #include <limits.h>
 
 // valor de PI com precisão de 100 casas decimais
@@ -14,7 +16,24 @@ typedef enum bool
   true = 1
 } bool;
 
+typedef struct Requisicao
+{
+  int digitos_pi;
+  int tempo_espera;
+} Requisicao;
+
+pthread_mutex_t mutex_workers;
+pthread_cond_t cond_workers;
+
+int workers_disponiveis = 0;
+
+pthread_mutex_t mutex_req;
+pthread_cond_t cond_req;
+
+Requisicao requisicao_a_fazer;
+
 int main(const int, const char **);
+
 int read_quantidade_requisicoes(const int, const char **);
 bool gera_requisicoes(const char *, const int, const int, const int, const int, const int);
 
