@@ -42,6 +42,7 @@ char *get_pi(char *, const int);
 
 // funções auxiliares
 int get_aleatorio(const int, const int);
+unsigned long get_tamanho_caracteres_int();
 
 // função principal
 int main(const int argc, const char **argv)
@@ -165,10 +166,7 @@ bool gera_requisicoes(
   int digitos, tempo;
 
   // quantidade de caracteres que um inteiro pode ter
-  unsigned long tamanho_int;
-  char str[21];
-  sprintf(str, "%d", INT_MAX);
-  tamanho_int = strlen(str);
+  unsigned long tamanho_int = get_tamanho_caracteres_int();
 
   // cria o texto
   for (int i = 0; i < quantidade_requisicoes; i++)
@@ -359,4 +357,14 @@ char *get_pi(char *destino, const int digitos)
     destino[1] = '\0';
 
   return destino;
+}
+
+/**
+ * Retorna a quantidade máxima de caracteres que um int pode ter no SO
+ */
+unsigned long get_tamanho_caracteres_int()
+{
+  char str[32];
+  sprintf(str, "%d", INT_MAX);
+  return strlen(str);
 }
