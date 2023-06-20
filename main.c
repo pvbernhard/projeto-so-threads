@@ -35,6 +35,11 @@ typedef struct ParametrosDispatcher
   const char *arquivo_requisicoes;
 } ParametrosDispatcher;
 
+typedef struct ParametrosWorker
+{
+  int id;
+} ParametrosWorker;
+
 // VARIÁVEIS GLOBAIS
 
 pthread_mutex_t mutex_workers;
@@ -43,6 +48,7 @@ pthread_cond_t cond_workers;
 int workers_disponiveis = 0;
 
 pthread_mutex_t mutex_req;
+pthread_cond_t cond_req;
 
 Requisicao requisicao_a_fazer;
 
@@ -111,20 +117,28 @@ int main(const int argc, const char **argv)
   }
 
   pthread_t thread_dispatcher;
-  ParametrosDispatcher args;
 
+  // inicializa mutexes
+  pthread_mutex_init(&mutex_workers, NULL);
+  pthread_cond_init(&cond_workers, NULL);
+  pthread_mutex_init(&mutex_req, NULL);
+  pthread_cond_init(&cond_req, NULL);
+
+  // inicializa parâmetros
+  ParametrosDispatcher args;
   args.n_workers = N;
   args.tempo_req = TEMPOREQ;
   args.arquivo_requisicoes = arquivo_requisicoes;
+
+  // inicializa requisição
+  requisicao_a_fazer.digitos_pi = 0;
+  requisicao_a_fazer.tempo_espera = 0;
 
   if (pthread_create(&thread_dispatcher, NULL, thread_dispatcher_func, (void *)&args) != 0)
   {
     printf("Erro ao criar a thread\n");
     return erro;
   }
-
-  // TODO: Instanciar threads trabalhadoras
-  // TODO: Instanciar thread dispatcher
 
   // aguarda a thread terminar
   pthread_join(thread_dispatcher, NULL);
@@ -134,7 +148,72 @@ int main(const int argc, const char **argv)
 
 void *thread_worker_func(void *args)
 {
-  printf("WORKER!\n");
+  // lê parâmetros
+  ParametrosWorker *arg = (ParametrosWorker *)args;
+  const int id = arg->id;
+
+  int quantidade_requisicoes = 0;
+
+  char buffer[100];
+  sprintf(buffer, "req_%d.txt", id);
+
+  FILE *fp = fopen(buffer, "w");
+  if (fp == NULL)
+  {
+    printf("Erro ao criar arquivo %s!\n", buffer);
+    pthread_exit(NULL);
+  }
+
+  int digitos_pi;
+  int tempo_espera;
+
+  while (true)
+  {
+    pthread_mutex_lock(&mutex_workers);
+    workers_disponiveis++;
+    pthread_cond_signal(&cond_workers);
+    pthread_mutex_unlock(&mutex_workers);
+
+    pthread_mutex_lock(&mutex_req);
+
+    while (requisicao_a_fazer.digitos_pi == 0)
+    {
+      pthread_cond_wait(&cond_req, &mutex_req);
+    }
+
+    // fim das requisições
+    if (requisicao_a_fazer.digitos_pi == -1)
+    {
+      // acorda todas as threads
+      pthread_cond_broadcast(&cond_req);
+      pthread_mutex_unlock(&mutex_req);
+      break;
+    }
+
+    // carrega os dados da requisição
+    digitos_pi = requisicao_a_fazer.digitos_pi;
+    tempo_espera = requisicao_a_fazer.tempo_espera;
+
+    pthread_mutex_lock(&mutex_workers);
+    // se remove da lista de workers disponíveis
+    workers_disponiveis--;
+    pthread_mutex_unlock(&mutex_workers);
+
+    // reseta requisição
+    requisicao_a_fazer.digitos_pi = 0;
+    requisicao_a_fazer.tempo_espera = 0;
+
+    pthread_mutex_unlock(&mutex_req);
+
+    // inicia execução da requisição
+    printf("WORKER %d\n", id);
+    // memória: inteiro (3) + ponto + digitos + \0
+    char *pi = (char *)calloc(2 + digitos_pi + 1, sizeof(char));
+    get_pi(pi, digitos_pi);
+    quantidade_requisicoes++;
+  }
+
+  fclose(fp);
   pthread_exit(NULL);
 }
 
@@ -146,17 +225,15 @@ void *thread_dispatcher_func(void *args)
   const int TEMPOREQ = arg->tempo_req;
   const char *ARQUIVO = arg->arquivo_requisicoes;
 
-  // inicializa workers
   pthread_t thread_worker[N_WORKERS];
+  ParametrosWorker worker_args[N_WORKERS];
   for (int i = 0; i < N_WORKERS; i++)
   {
-    pthread_create(&thread_worker[i], NULL, thread_worker_func, NULL);
+    // inicializa parâmetros do worker
+    worker_args[i].id = i + 1;
+    // inicializa workers
+    pthread_create(&thread_worker[i], NULL, thread_worker_func, (void *)&worker_args[i]);
   }
-
-  // inicializa mutexes
-  pthread_mutex_init(&mutex_workers, NULL);
-  pthread_cond_init(&cond_workers, NULL);
-  pthread_mutex_init(&mutex_req, NULL);
 
   unsigned long tamanho_int = get_tamanho_caracteres_int();
   // memória: int + ';' + int + '\n' + '\0'
@@ -176,10 +253,22 @@ void *thread_dispatcher_func(void *args)
   // lê o arquivo linha por linha
   while (fgets(linha, sizeof(linha), fp) != NULL)
   {
-    // printf("%s", linha);
+    // ignora linhas vazias
+    if (strlen(linha) <= 3)
+    {
+      continue;
+    }
+    // espera um worker estar disponível
+    pthread_mutex_lock(&mutex_workers);
+    while (workers_disponiveis <= 0)
+    {
+      pthread_cond_wait(&cond_workers, &mutex_workers);
+    }
+    pthread_mutex_unlock(&mutex_workers);
 
     pthread_mutex_lock(&mutex_req);
 
+    // lê variáveis da linha
     n_scan = sscanf(
         linha,
         "%d;%d",
@@ -188,7 +277,10 @@ void *thread_dispatcher_func(void *args)
 
     if (n_scan == 2)
     {
+      // sinal de que a requisição foi adicionada
+      pthread_cond_signal(&cond_req);
       pthread_mutex_unlock(&mutex_req);
+
       // aguarda o intervalo
       usleep(TEMPOREQ * 1000);
     }
@@ -201,6 +293,12 @@ void *thread_dispatcher_func(void *args)
   fclose(fp);
   free(linha);
 
+  // indica fim das requisições
+  pthread_mutex_lock(&mutex_req);
+  requisicao_a_fazer.digitos_pi = -1;
+  pthread_cond_broadcast(&cond_req);
+  pthread_mutex_unlock(&mutex_req);
+
   // espera workers finalizarem
   for (int i = 0; i < N_WORKERS; i++)
   {
@@ -210,6 +308,7 @@ void *thread_dispatcher_func(void *args)
   pthread_mutex_destroy(&mutex_workers);
   pthread_cond_destroy(&cond_workers);
   pthread_mutex_destroy(&mutex_req);
+  pthread_cond_destroy(&cond_req);
 
   pthread_exit(NULL);
 }
