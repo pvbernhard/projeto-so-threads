@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <gmp.h>
 
@@ -7,15 +8,19 @@
 #include <time.h>
 #include <limits.h>
 
-// valor de PI com precisão de 100 casas decimais
-const char PI[] = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679";
+// TIPOS
 
-// tipo booleano
 typedef enum bool
 {
   false = 0,
   true = 1
 } bool;
+
+typedef enum erros
+{
+  erro = 1,
+  sucesso = 0
+} erros;
 
 typedef struct Requisicao
 {
@@ -23,17 +28,30 @@ typedef struct Requisicao
   int tempo_espera;
 } Requisicao;
 
+typedef struct ParametrosDispatcher
+{
+  int n_workers;
+  int tempo_req;
+  const char *arquivo_requisicoes;
+} ParametrosDispatcher;
+
+// VARIÁVEIS GLOBAIS
+
 pthread_mutex_t mutex_workers;
 pthread_cond_t cond_workers;
 
 int workers_disponiveis = 0;
 
 pthread_mutex_t mutex_req;
-pthread_cond_t cond_req;
 
 Requisicao requisicao_a_fazer;
 
+// FUNÇÕES
+
 int main(const int, const char **);
+
+void *thread_worker_func(void *);
+void *thread_dispatcher_func(void *);
 
 int read_quantidade_requisicoes(const int, const char **);
 bool gera_requisicoes(const char *, const int, const int, const int, const int, const int);
@@ -47,13 +65,13 @@ unsigned long get_tamanho_caracteres_int();
 // função principal
 int main(const int argc, const char **argv)
 {
-  int digitos = 1000;
-  // memória: inteiro (3) + ponto + digitos + \0
-  char *pi = (char *)calloc(2 + digitos + 1, sizeof(char));
-  get_pi(pi, digitos);
+  // int digitos = 1000;
+  // // memória: inteiro (3) + ponto + digitos + \0
+  // char *pi = (char *)calloc(2 + digitos + 1, sizeof(char));
+  // get_pi(pi, digitos);
 
-  printf("PI: %s\n", pi);
-  return 0;
+  // printf("PI: %s\n", pi);
+  // return 0;
 
   // número de threads trabalhadoras
   const int N = 10;
@@ -74,10 +92,10 @@ int main(const int argc, const char **argv)
    * lê a quantidade de requisições do
    * parâmetro passado ao programa ou do input
    */
-  int quantidade_requisicoes = read_quantidade_requisicoes(argc, argv);
+  const int quantidade_requisicoes = read_quantidade_requisicoes(argc, argv);
 
   // gera o arquivo de requisições
-  bool requisicoes = gera_requisicoes(
+  erros requisicoes = gera_requisicoes(
       arquivo_requisicoes,
       quantidade_requisicoes,
       digitos_min,
@@ -86,16 +104,114 @@ int main(const int argc, const char **argv)
       tempoespera_max);
 
   // verifica se o arquivo foi ou não gerado com sucesso
-  if (!requisicoes)
+  if (requisicoes == erro)
   {
     puts("Erro ao tentar criar o arquivo de requisições!");
     return 0;
   }
 
+  pthread_t thread_dispatcher;
+  ParametrosDispatcher args;
+
+  args.n_workers = N;
+  args.tempo_req = TEMPOREQ;
+  args.arquivo_requisicoes = arquivo_requisicoes;
+
+  if (pthread_create(&thread_dispatcher, NULL, thread_dispatcher_func, (void *)&args) != 0)
+  {
+    printf("Erro ao criar a thread\n");
+    return erro;
+  }
+
   // TODO: Instanciar threads trabalhadoras
   // TODO: Instanciar thread dispatcher
 
-  return 0;
+  // aguarda a thread terminar
+  pthread_join(thread_dispatcher, NULL);
+
+  return sucesso;
+}
+
+void *thread_worker_func(void *args)
+{
+  printf("WORKER!\n");
+  pthread_exit(NULL);
+}
+
+void *thread_dispatcher_func(void *args)
+{
+  // lê parâmetros
+  ParametrosDispatcher *arg = (ParametrosDispatcher *)args;
+  const int N_WORKERS = arg->n_workers;
+  const int TEMPOREQ = arg->tempo_req;
+  const char *ARQUIVO = arg->arquivo_requisicoes;
+
+  // inicializa workers
+  pthread_t thread_worker[N_WORKERS];
+  for (int i = 0; i < N_WORKERS; i++)
+  {
+    pthread_create(&thread_worker[i], NULL, thread_worker_func, NULL);
+  }
+
+  // inicializa mutexes
+  pthread_mutex_init(&mutex_workers, NULL);
+  pthread_cond_init(&cond_workers, NULL);
+  pthread_mutex_init(&mutex_req, NULL);
+
+  unsigned long tamanho_int = get_tamanho_caracteres_int();
+  // memória: int + ';' + int + '\n' + '\0'
+  char *linha = (char *)calloc(tamanho_int + 1 + tamanho_int + 2, sizeof(char));
+
+  FILE *fp = fopen(ARQUIVO, "r");
+  if (fp == NULL)
+  {
+    printf("Erro ao ler arquivo %s!\n", ARQUIVO);
+    return NULL;
+  }
+
+  int digitos_pi;
+  int tempo_espera;
+  int n_scan;
+
+  // lê o arquivo linha por linha
+  while (fgets(linha, sizeof(linha), fp) != NULL)
+  {
+    // printf("%s", linha);
+
+    pthread_mutex_lock(&mutex_req);
+
+    n_scan = sscanf(
+        linha,
+        "%d;%d",
+        &(requisicao_a_fazer.digitos_pi),
+        &(requisicao_a_fazer.tempo_espera));
+
+    if (n_scan == 2)
+    {
+      pthread_mutex_unlock(&mutex_req);
+      // aguarda o intervalo
+      usleep(TEMPOREQ * 1000);
+    }
+    else
+    {
+      pthread_mutex_unlock(&mutex_req);
+    }
+  }
+
+  fclose(fp);
+  free(linha);
+
+  // espera workers finalizarem
+  for (int i = 0; i < N_WORKERS; i++)
+  {
+    pthread_join(thread_worker[i], NULL);
+  }
+
+  pthread_mutex_destroy(&mutex_workers);
+  pthread_cond_destroy(&cond_workers);
+  pthread_mutex_destroy(&mutex_req);
+
+  pthread_exit(NULL);
 }
 
 /**
@@ -157,7 +273,7 @@ bool gera_requisicoes(
     puts("Erro ao alocar memória para o texto das requisições!");
 
     // retorna erro
-    return false;
+    return erro;
   }
 
   // inicializa seed de números aleatório com o tempo atual
@@ -204,7 +320,7 @@ bool gera_requisicoes(
     printf("Erro ao criar arquivo %s!\n", nome_arquivo);
 
     // retorna erro
-    return false;
+    return erro;
   }
 
   // escreve no arquivo
@@ -214,7 +330,7 @@ bool gera_requisicoes(
   free(txt);
 
   // retorna sucesso
-  return true;
+  return sucesso;
 }
 
 /**
