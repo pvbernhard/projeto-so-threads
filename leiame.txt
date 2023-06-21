@@ -1,0 +1,24 @@
+# Compilando
+
+Para compilar e executar o código, é preciso ter a biblioteca GMP instalada no sistema.
+Em sistemas linux, para instala a biblioteca, basta executar:
+
+> sudo apt install libgmp-dev
+
+Para compilar e executar o código, o comando:
+
+> gcc main.c -o main -lgmp && ./main
+
+Também é possível passar o número de requisições via linha de comando, por exemplo,
+para criar e executar 7 requisições, o comando:
+
+> ./main 7
+
+# Dificuldades
+
+- Encontrar uma boa maneira de calcular PI foi bem trabalhoso. No final acabei implementando o
+algoritmo de Gauss–Legendre com a biblioteca GMP.
+- Primeiramente eu tentei inicializar os mutexes (pthread_mutex_init) dentro da thread dispatcher,
+mas isso ocasionou em um bug estranho que travava aleatoriamente durante um pthread_cond_signal,
+para resolver, mudei a inicialização para a main e daí funcionou normal - achar o erro foi bem
+trabalhoso.
