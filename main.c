@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 #include <limits.h>
+#include <sys/stat.h>
 
 // TIPOS
 
@@ -37,6 +38,7 @@ typedef struct ParametrosDispatcher
 
 typedef struct ParametrosWorker
 {
+  char *pasta;
   int id;
 } ParametrosWorker;
 
@@ -150,17 +152,23 @@ void *thread_worker_func(void *args)
 {
   // lê parâmetros
   ParametrosWorker *arg = (ParametrosWorker *)args;
+  const char *pasta = arg->pasta;
   const int id = arg->id;
 
   int quantidade_requisicoes = 0;
 
-  char buffer[100];
-  sprintf(buffer, "req_%d.txt", id);
+  char nome_arquivo[100];
+  sprintf(nome_arquivo, "%d.txt", id);
 
-  FILE *fp = fopen(buffer, "w");
+  char caminho[100];
+  strcpy(caminho, pasta);
+  strcat(caminho, "/");
+  strcat(caminho, nome_arquivo);
+
+  FILE *fp = fopen(caminho, "w");
   if (fp == NULL)
   {
-    printf("Erro ao criar arquivo %s!\n", buffer);
+    printf("Erro ao criar arquivo %s!\n", caminho);
     pthread_exit(NULL);
   }
 
@@ -206,11 +214,22 @@ void *thread_worker_func(void *args)
     pthread_mutex_unlock(&mutex_req);
 
     // inicia execução da requisição
-    printf("WORKER %d\n", id);
+    // printf("WORKER %d\n", id);
     // memória: inteiro (3) + ponto + digitos + \0
     char *pi = (char *)calloc(2 + digitos_pi + 1, sizeof(char));
     get_pi(pi, digitos_pi);
+
+    // espera o tempo_espera
+    usleep(tempo_espera * 1000);
+
     quantidade_requisicoes++;
+
+    // coloca no arquivo:
+    // quantidade de requisições da thread;(parâmetros da requisição);pi
+    fprintf(fp, "%d;%d;%d;%s\n", quantidade_requisicoes, digitos_pi, tempo_espera, pi);
+    printf("WORKER %d : %d;%d;%d;%s\n", id, quantidade_requisicoes, digitos_pi, tempo_espera, pi);
+
+    free(pi);
   }
 
   fclose(fp);
@@ -225,11 +244,23 @@ void *thread_dispatcher_func(void *args)
   const int TEMPOREQ = arg->tempo_req;
   const char *ARQUIVO = arg->arquivo_requisicoes;
 
+  // cria pasta se não existe
+  char *pasta = "requisicoes";
+  if (access(pasta, F_OK) == -1)
+  {
+    if (mkdir(pasta, 0777) != 0)
+    {
+      printf("Erro ao criar pasta %s!\n", pasta);
+      pthread_exit(NULL);
+    }
+  }
+
   pthread_t thread_worker[N_WORKERS];
   ParametrosWorker worker_args[N_WORKERS];
   for (int i = 0; i < N_WORKERS; i++)
   {
     // inicializa parâmetros do worker
+    worker_args[i].pasta = pasta;
     worker_args[i].id = i + 1;
     // inicializa workers
     pthread_create(&thread_worker[i], NULL, thread_worker_func, (void *)&worker_args[i]);
