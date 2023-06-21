@@ -73,16 +73,8 @@ unsigned long get_tamanho_caracteres_int();
 // função principal
 int main(const int argc, const char **argv)
 {
-  // int digitos = 1000;
-  // // memória: inteiro (3) + ponto + digitos + \0
-  // char *pi = (char *)calloc(2 + digitos + 1, sizeof(char));
-  // get_pi(pi, digitos);
-
-  // printf("PI: %s\n", pi);
-  // return 0;
-
   // número de threads trabalhadoras
-  const int N = 10;
+  const int N = 5;
 
   // periodicidade das requisições em milisegundos
   const int TEMPOREQ = 250;
